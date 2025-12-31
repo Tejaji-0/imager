@@ -13,6 +13,7 @@ import numpy as np
 from typing import Optional
 
 from processor import ImageProcessor
+from image_utils import load_image, get_image_info
 
 app = FastAPI(
     title="Imager API",
@@ -102,9 +103,8 @@ async def process_images(
         source_bytes = await source_image.read()
         target_bytes = await target_image.read()
         
-        # Open as PIL Images
-        source_img = Image.open(io.BytesIO(source_bytes)).convert('RGB')
-        target_img = Image.open(io.BytesIO(target_bytes)).convert('RGB')
+        source_img = load_image(source_bytes, mode='RGB')
+        target_img = load_image(target_bytes, mode='RGB')
         
         output_img = processor.process(source_img, target_img, method=method)
         
@@ -136,33 +136,36 @@ async def analyze_images(
         source_bytes = await source_image.read()
         target_bytes = await target_image.read()
         
-        # Open as PIL Images
-        source_img = Image.open(io.BytesIO(source_bytes)).convert('RGB')
-        target_img = Image.open(io.BytesIO(target_bytes)).convert('RGB')
+        source_img = load_image(source_bytes, mode='RGB')
+        target_img = load_image(target_bytes, mode='RGB')
         
-        source_arr = np.array(source_img)
-        target_arr = np.array(target_img)
+        source_info = get_image_info(source_img)
+        target_info = get_image_info(target_img)
         
         return {
             "source": {
-                "width": source_img.width,
-                "height": source_img.height,
-                "pixels": source_img.width * source_img.height,
-                "mean_color": source_arr.mean(axis=(0, 1)).tolist(),
-                "std_color": source_arr.std(axis=(0, 1)).tolist()
+                "width": source_info['width'],
+                "height": source_info['height'],
+                "pixels": source_info['pixel_count'],
+                "mean_value": float(source_info['mean_value']),
+                "std_value": float(source_info['std_value']),
+                "min_value": int(source_info['min_value']),
+                "max_value": int(source_info['max_value'])
             },
             "target": {
-                "width": target_img.width,
-                "height": target_img.height,
-                "pixels": target_img.width * target_img.height,
-                "mean_color": target_arr.mean(axis=(0, 1)).tolist(),
-                "std_color": target_arr.std(axis=(0, 1)).tolist()
+                "width": target_info['width'],
+                "height": target_info['height'],
+                "pixels": target_info['pixel_count'],
+                "mean_value": float(target_info['mean_value']),
+                "std_value": float(target_info['std_value']),
+                "min_value": int(target_info['min_value']),
+                "max_value": int(target_info['max_value'])
             },
             "compatibility": {
-                "same_dimensions": (source_img.width == target_img.width and 
-                                   source_img.height == target_img.height),
-                "same_pixel_count": (source_img.width * source_img.height == 
-                                    target_img.width * target_img.height)
+                "same_dimensions": (source_info['width'] == target_info['width'] and 
+                                   source_info['height'] == target_info['height']),
+                "same_pixel_count": (source_info['pixel_count'] == target_info['pixel_count']),
+                "note": "Images will be resized to same dimensions during processing"
             }
         }
         

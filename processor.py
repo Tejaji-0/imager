@@ -9,6 +9,15 @@ import numpy as np
 from PIL import Image
 from typing import Tuple
 
+from image_utils import (
+    prepare_image_pair,
+    ensure_same_size,
+    image_to_array,
+    array_to_image,
+    validate_image_pair,
+    get_image_info
+)
+
 
 class ImageProcessor:
     def __init__(self):
@@ -20,8 +29,18 @@ class ImageProcessor:
             print(f"\n Processing using: {method}")
             print(f"   Source: {source.size}, Target: {target.size}")
         
-        source_arr = np.array(source)
-        target_arr = np.array(target)
+        source_resized, target_resized = ensure_same_size(source, target)
+        
+        if self.debug and (source.size != source_resized.size or target.size != target_resized.size):
+            print(f"   📏 Resized to: {source_resized.size}")
+        
+        try:
+            validate_image_pair(source_resized, target_resized)
+        except ValueError as e:
+            print(f"   Validation warning: {e}")
+        
+        source_arr = image_to_array(source_resized)
+        target_arr = image_to_array(target_resized)
         
         if method == "simple":
             output_arr = self._process_simple(source_arr, target_arr)
@@ -31,19 +50,11 @@ class ImageProcessor:
             output_arr = self._process_block(source_arr, target_arr)
         else:
             output_arr = self._process_simple(source_arr, target_arr)
-
-        return Image.fromarray(output_arr.astype('uint8'), 'RGB')
+        
+        return array_to_image(output_arr, mode='RGB')
     
     def _process_simple(self, source: np.ndarray, target: np.ndarray) -> np.ndarray:
 
-        target_h, target_w = target.shape[:2]
-        source_h, source_w = source.shape[:2]
-        
-        if (source_h, source_w) != (target_h, target_w):
-            source_img = Image.fromarray(source)
-            source_img = source_img.resize((target_w, target_h), Image.LANCZOS)
-            source = np.array(source_img)
-        
         source_flat = source.reshape(-1, 3)
         target_flat = target.reshape(-1, 3)
         
@@ -60,8 +71,9 @@ class ImageProcessor:
         output = output_flat.reshape(target.shape)
         
         if self.debug:
-            print(f"    processing complete")
+            print(f"    Simple processing complete")
             print(f"    Output shape: {output.shape}")
+            print(f"    Pixel count preserved: {source_flat.shape[0]}")
         
         return output
     
@@ -71,7 +83,6 @@ class ImageProcessor:
         TODO: Preserve some spatial coherence from source
         """
 
-        # For now, use simple method as baseline
         return self._process_simple(source, target)
     
     def _process_block(self, source: np.ndarray, target: np.ndarray, block_size: int = 8) -> np.ndarray:
@@ -92,12 +103,10 @@ class ImageProcessor:
     
     def verify_pixel_conservation(self, source: Image.Image, output: Image.Image) -> bool:
 
-        source_arr = np.array(source)
-        output_arr = np.array(output)
+        source_resized, output_resized = ensure_same_size(source, output)
         
-        if source_arr.shape[:2] != output_arr.shape[:2]:
-            source_img = source.resize(output.size, Image.LANCZOS)
-            source_arr = np.array(source_img)
+        source_arr = image_to_array(source_resized)
+        output_arr = image_to_array(output_resized)
         
         source_pixels = set(map(tuple, source_arr.reshape(-1, 3)))
         output_pixels = set(map(tuple, output_arr.reshape(-1, 3)))
