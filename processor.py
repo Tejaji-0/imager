@@ -15,7 +15,11 @@ from image_utils import (
     image_to_array,
     array_to_image,
     validate_image_pair,
-    get_image_info
+    get_image_info,
+    flatten_image,
+    unflatten_image,
+    verify_pixel_preservation,
+    rearrange_flat_pixels
 )
 
 
@@ -54,10 +58,28 @@ class ImageProcessor:
         return array_to_image(output_arr, mode='RGB')
     
     def _process_simple(self, source: np.ndarray, target: np.ndarray) -> np.ndarray:
-
-        source_flat = source.reshape(-1, 3)
-        target_flat = target.reshape(-1, 3)
+        """
+        Simple pixel-wise rearrangement using brightness-based sorting.
         
+        Strategy:
+        1. Both images already have same dimensions (handled by prepare step)
+        2. Flatten to 1D arrays of pixels
+        3. Sort all pixels from both images by brightness
+        4. Map sorted source pixels to sorted target positions
+        5. Reconstruct to image shape
+        
+        This ensures we only use source pixels (no generation)
+        and create a basic resemblance to target structure.
+        """
+        # Flatten both images to 1D pixel arrays
+        source_flat = flatten_image(source)
+        target_flat = flatten_image(target)
+        
+        if self.debug:
+            print(f"   📦 Flattened source: {source_flat.shape}")
+            print(f"   📦 Flattened target: {target_flat.shape}")
+        
+        # Calculate brightness for each pixel (simple: average of RGB)
         source_brightness = source_flat.mean(axis=1)
         target_brightness = target_flat.mean(axis=1)
         
@@ -68,7 +90,19 @@ class ImageProcessor:
         
         output_flat[target_order] = source_flat[source_order]
         
-        output = output_flat.reshape(target.shape)
+        # Verify pixel preservation (debugging)
+        if self.debug:
+            source_pixels = set(map(tuple, source_flat))
+            output_pixels = set(map(tuple, output_flat))
+            if source_pixels == output_pixels:
+                print(f"   ✓ All source pixels preserved in output")
+            else:
+                unexpected = output_pixels - source_pixels
+                print(f"   ⚠️  Warning: {len(unexpected)} unexpected pixels in output")
+        
+        # Unflatten back to image dimensions
+        height, width = target.shape[:2]
+        output = unflatten_image(output_flat, height, width, 3)
         
         if self.debug:
             print(f"    Simple processing complete")
@@ -91,7 +125,6 @@ class ImageProcessor:
         TODO: Handle edge cases where blocks don't align perfectly
         """
 
-        # Block-based logic to be implemented
         if self.debug:
             print(f"   simple methode used")
         return self._process_simple(source, target)

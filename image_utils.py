@@ -175,6 +175,149 @@ def resize_to_standard_sizes(img: Image.Image, size_name: str = 'medium') -> Ima
     return resize_to_fixed_size(img, sizes[size_name])
 
 
+def flatten_image(img: Union[Image.Image, np.ndarray]) -> np.ndarray:
+
+    if isinstance(img, Image.Image):
+        arr = image_to_array(img)
+    else:
+        arr = img
+
+    height, width = arr.shape[:2]
+    num_channels = arr.shape[2] if arr.ndim == 3 else 1
+
+    if arr.ndim == 3:
+        flat = arr.reshape(-1, num_channels)
+    else:
+        flat = arr.reshape(-1, 1)
+    
+    return flat
+
+
+def unflatten_image(
+    flat: np.ndarray,
+    height: int,
+    width: int,
+    channels: Optional[int] = None
+) -> np.ndarray:
+
+    if flat.ndim not in [1, 2]:
+        raise ValueError(f"Flat array must be 1D or 2D, got shape {flat.shape}")
+
+    if channels is None:
+        if flat.ndim == 2:
+            channels = flat.shape[1]
+        else:
+            channels = 1
+
+    num_pixels = flat.shape[0]
+    expected_pixels = height * width
+    
+    if num_pixels != expected_pixels:
+        raise ValueError(
+            f"Pixel count mismatch: flat array has {num_pixels} pixels, "
+            f"but {height}x{width} = {expected_pixels} pixels"
+        )
+
+    if channels == 1:
+        reconstructed = flat.reshape(height, width)
+    else:
+        reconstructed = flat.reshape(height, width, channels)
+    
+    return reconstructed
+
+
+def verify_pixel_preservation(
+    original: Union[Image.Image, np.ndarray],
+    reconstructed: Union[Image.Image, np.ndarray]
+) -> Tuple[bool, dict]:
+
+    if isinstance(original, Image.Image):
+        orig_arr = image_to_array(original)
+    else:
+        orig_arr = original
+    
+    if isinstance(reconstructed, Image.Image):
+        recon_arr = image_to_array(reconstructed)
+    else:
+        recon_arr = reconstructed
+    
+    info = {}
+    info['original_shape'] = orig_arr.shape
+    info['reconstructed_shape'] = recon_arr.shape
+    info['shapes_match'] = orig_arr.shape == recon_arr.shape
+    
+    if not info['shapes_match']:
+        info['preserved'] = False
+        info['reason'] = "Shape mismatch"
+        return False, info
+
+    info['pixels_equal'] = np.array_equal(orig_arr, recon_arr)
+
+    info['original_dtype'] = str(orig_arr.dtype)
+    info['reconstructed_dtype'] = str(recon_arr.dtype)
+    info['dtypes_match'] = orig_arr.dtype == recon_arr.dtype
+
+    if info['pixels_equal']:
+        info['max_difference'] = 0
+        info['mean_difference'] = 0.0
+        info['num_different_pixels'] = 0
+    else:
+        diff = np.abs(orig_arr.astype(float) - recon_arr.astype(float))
+        info['max_difference'] = float(diff.max())
+        info['mean_difference'] = float(diff.mean())
+        info['num_different_pixels'] = int(np.count_nonzero(diff))
+
+    info['original_sum'] = int(orig_arr.sum())
+    info['reconstructed_sum'] = int(recon_arr.sum())
+    info['sums_match'] = info['original_sum'] == info['reconstructed_sum']
+
+    info['preserved'] = (
+        info['shapes_match'] and
+        info['pixels_equal'] and
+        info['dtypes_match']
+    )
+    
+    return info['preserved'], info
+
+
+def flatten_and_verify(img: Union[Image.Image, np.ndarray]) -> Tuple[np.ndarray, dict]:
+
+    if isinstance(img, Image.Image):
+        arr = image_to_array(img)
+    else:
+        arr = img
+
+    height, width = arr.shape[:2]
+    channels = arr.shape[2] if arr.ndim == 3 else 1
+
+    flat = flatten_image(arr)
+
+    reconstructed = unflatten_image(flat, height, width, channels)
+
+    preserved, info = verify_pixel_preservation(arr, reconstructed)
+
+    info['flattened_shape'] = flat.shape
+    info['can_reconstruct'] = preserved
+    
+    return flat, info
+
+
+def rearrange_flat_pixels(
+    flat: np.ndarray,
+    indices: np.ndarray
+) -> np.ndarray:
+
+    if flat.shape[0] != indices.shape[0]:
+        raise ValueError(
+            f"Pixel count mismatch: flat has {flat.shape[0]} pixels, "
+            f"but indices has {indices.shape[0]} elements"
+        )
+
+    rearranged = flat[indices]
+    
+    return rearranged
+
+
 __all__ = [
     'load_image',
     'resize_to_fixed_size',
@@ -186,5 +329,10 @@ __all__ = [
     'validate_image_pair',
     'smart_resize',
     'resize_to_standard_sizes',
+    'flatten_image',
+    'unflatten_image',
+    'verify_pixel_preservation',
+    'flatten_and_verify',
+    'rearrange_flat_pixels',
     'DEFAULT_SIZE'
 ]
