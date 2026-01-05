@@ -52,6 +52,8 @@ class ImageProcessor:
             output_arr = self._process_sorted(source_arr, target_arr)
         elif method == "block":
             output_arr = self._process_block(source_arr, target_arr)
+        elif method == "random":
+            output_arr = self._process_random(source_arr, target_arr)
         else:
             output_arr = self._process_simple(source_arr, target_arr)
         
@@ -76,8 +78,8 @@ class ImageProcessor:
         target_flat = flatten_image(target)
         
         if self.debug:
-            print(f"   📦 Flattened source: {source_flat.shape}")
-            print(f"   📦 Flattened target: {target_flat.shape}")
+            print(f"   Flattened source: {source_flat.shape}")
+            print(f"   Flattened target: {target_flat.shape}")
         
         # Calculate brightness for each pixel (simple: average of RGB)
         source_brightness = source_flat.mean(axis=1)
@@ -95,10 +97,10 @@ class ImageProcessor:
             source_pixels = set(map(tuple, source_flat))
             output_pixels = set(map(tuple, output_flat))
             if source_pixels == output_pixels:
-                print(f"   ✓ All source pixels preserved in output")
+                print(f"   All source pixels preserved in output")
             else:
                 unexpected = output_pixels - source_pixels
-                print(f"   ⚠️  Warning: {len(unexpected)} unexpected pixels in output")
+                print(f"   Warning: {len(unexpected)} unexpected pixels in output")
         
         # Unflatten back to image dimensions
         height, width = target.shape[:2]
@@ -126,8 +128,39 @@ class ImageProcessor:
         """
 
         if self.debug:
-            print(f"   simple methode used")
+            print(f"   Block method not fully implemented yet, using simple")
         return self._process_simple(source, target)
+    
+    def _process_random(self, source: np.ndarray, target: np.ndarray) -> np.ndarray:
+
+        source_flat = flatten_image(source)
+        
+        if self.debug:
+            print(f"   Flattened source: {source_flat.shape}")
+            print(f"   Applying random permutation...")
+        
+        num_pixels = source_flat.shape[0]
+        random_indices = np.random.permutation(num_pixels)
+
+        rearranged_flat = rearrange_flat_pixels(source_flat, random_indices)
+
+        if self.debug:
+            source_pixels = set(map(tuple, source_flat))
+            output_pixels = set(map(tuple, rearranged_flat))
+            if source_pixels == output_pixels:
+                print(f"   All source pixels preserved in random output")
+            else:
+                print(f"   Warning: Pixel preservation check failed!")
+
+        height, width = target.shape[:2]
+        output = unflatten_image(rearranged_flat, height, width, 3)
+        
+        if self.debug:
+            print(f"   Random rearrangement complete")
+            print(f"   Output shape: {output.shape}")
+            print(f"   Pixels randomized: {num_pixels:,}")
+        
+        return output
     
     def _calculate_similarity(self, img1: np.ndarray, img2: np.ndarray) -> float:
 
