@@ -36,7 +36,7 @@ class ImageProcessor:
         source_resized, target_resized = ensure_same_size(source, target)
         
         if self.debug and (source.size != source_resized.size or target.size != target_resized.size):
-            print(f"   📏 Resized to: {source_resized.size}")
+            print(f"   Resized to: {source_resized.size}")
         
         try:
             validate_image_pair(source_resized, target_resized)
@@ -81,9 +81,16 @@ class ImageProcessor:
             print(f"   Flattened source: {source_flat.shape}")
             print(f"   Flattened target: {target_flat.shape}")
         
-        # Calculate brightness for each pixel (simple: average of RGB)
-        source_brightness = source_flat.mean(axis=1)
-        target_brightness = target_flat.mean(axis=1)
+        source_brightness = (
+            0.2126 * source_flat[:, 0] +
+            0.7152 * source_flat[:, 1] + 
+            0.0722 * source_flat[:, 2]
+        )
+        target_brightness = (
+            0.2126 * target_flat[:, 0] +
+            0.7152 * target_flat[:, 1] +
+            0.0722 * target_flat[:, 2]
+        )
         
         source_order = np.argsort(source_brightness)
         target_order = np.argsort(target_brightness)
